@@ -23,3 +23,6 @@ go.work.sum
 
 # env file
 .env
+
+# packet captures from go test -
+*.pcap
