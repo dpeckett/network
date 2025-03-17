@@ -12,9 +12,9 @@ type DialContext func(ctx context.Context, network, address string) (net.Conn, e
 type Network interface {
 	// DialContext connects to the address on the named network using the provided context.
 	DialContext(ctx context.Context, network, addr string) (net.Conn, error)
-	// LookupContextHost looks up the given host using the local resolver.
+	// LookupHost looks up the given host using the local resolver.
 	// It returns a slice of that host's addresses.
-	LookupContextHost(ctx context.Context, host string) ([]string, error)
+	LookupHost(ctx context.Context, host string) ([]string, error)
 	// Listen listens for incoming connections on the network address.
 	// Known networks are "tcp", "tcp4" (IPv4-only), "tcp6" (IPv6-only).
 	// If the address is an empty string, Listen listens on all available addresses.

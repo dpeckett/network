@@ -24,8 +24,8 @@ type ResolveConfig struct {
 	Options []string
 }
 
-// LookupContextHost looks up the given host using the resolver configuration.
-func (r *ResolveConfig) LookupContextHost(ctx context.Context, host string, dialContext DialContext) ([]string, error) {
+// LookupHost looks up the given host using the resolver configuration.
+func (r *ResolveConfig) LookupHost(ctx context.Context, host string, dialContext DialContext) ([]string, error) {
 	var resolver = &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {

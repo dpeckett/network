@@ -31,8 +31,8 @@ func TestLoopbackNetwork(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("LookupContextHost", func(t *testing.T) {
-		addrs, err := n.LookupContextHost(ctx, "anyhost")
+	t.Run("LookupHost", func(t *testing.T) {
+		addrs, err := n.LookupHost(ctx, "anyhost")
 		require.NoError(t, err)
 
 		assert.NotEmpty(t, addrs)

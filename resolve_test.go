@@ -31,7 +31,7 @@ func TestResolveLookupContextHost(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Absolute query", func(t *testing.T) {
-		addrs, err := resolveConf.LookupContextHost(ctx, "example.local", func(_ context.Context, network, address string) (net.Conn, error) {
+		addrs, err := resolveConf.LookupHost(ctx, "example.local", func(_ context.Context, network, address string) (net.Conn, error) {
 			return net.Dial(network, address)
 		})
 		require.NoError(t, err)
@@ -40,7 +40,7 @@ func TestResolveLookupContextHost(t *testing.T) {
 	})
 
 	t.Run("Relative query", func(t *testing.T) {
-		addrs, err := resolveConf.LookupContextHost(ctx, "example", func(_ context.Context, network, address string) (net.Conn, error) {
+		addrs, err := resolveConf.LookupHost(ctx, "example", func(_ context.Context, network, address string) (net.Conn, error) {
 			return net.Dial(network, address)
 		})
 		require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestResolveLookupContextHost(t *testing.T) {
 	})
 
 	t.Run("Not found", func(t *testing.T) {
-		addrs, err := resolveConf.LookupContextHost(ctx, "notfound", func(_ context.Context, network, address string) (net.Conn, error) {
+		addrs, err := resolveConf.LookupHost(ctx, "notfound", func(_ context.Context, network, address string) (net.Conn, error) {
 			return net.Dial(network, address)
 		})
 		require.Error(t, err)

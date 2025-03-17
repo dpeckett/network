@@ -23,7 +23,7 @@ func (n *LoopbackNetwork) DialContext(ctx context.Context, network, addr string)
 	return net.Dial(network, net.JoinHostPort("localhost", port))
 }
 
-func (n *LoopbackNetwork) LookupContextHost(ctx context.Context, host string) ([]string, error) {
+func (n *LoopbackNetwork) LookupHost(ctx context.Context, host string) ([]string, error) {
 	return (&net.Resolver{}).LookupHost(ctx, "localhost")
 }
 

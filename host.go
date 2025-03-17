@@ -18,7 +18,7 @@ func (n *HostNetwork) DialContext(ctx context.Context, network, addr string) (ne
 	return net.Dial(network, addr)
 }
 
-func (n *HostNetwork) LookupContextHost(ctx context.Context, host string) ([]string, error) {
+func (n *HostNetwork) LookupHost(ctx context.Context, host string) ([]string, error) {
 	return net.DefaultResolver.LookupHost(ctx, host)
 }
 

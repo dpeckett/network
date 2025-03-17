@@ -38,7 +38,7 @@ func (n *NetstackNetwork) DialContext(ctx context.Context, network, address stri
 	if addr, err := netip.ParseAddr(host); err == nil {
 		addrs = []netip.Addr{addr}
 	} else {
-		hosts, err := n.LookupContextHost(ctx, host)
+		hosts, err := n.LookupHost(ctx, host)
 		if err != nil {
 			return nil, fmt.Errorf("could not resolve hostname %s: %w", host, err)
 		}
@@ -85,13 +85,13 @@ func (n *NetstackNetwork) DialContext(ctx context.Context, network, address stri
 	return nil, fmt.Errorf("could not connect to any address: %w", firstErr)
 }
 
-func (n *NetstackNetwork) LookupContextHost(ctx context.Context, host string) ([]string, error) {
+func (n *NetstackNetwork) LookupHost(ctx context.Context, host string) ([]string, error) {
 	// If no custom DNS servers are set, use the system default resolver.
 	if n.resolveConf == nil || len(n.resolveConf.Nameservers) == 0 {
 		return net.DefaultResolver.LookupHost(ctx, host)
 	}
 
-	return n.resolveConf.LookupContextHost(ctx, host, n.DialContext)
+	return n.resolveConf.LookupHost(ctx, host, n.DialContext)
 }
 
 func (n *NetstackNetwork) Listen(network, address string) (net.Listener, error) {
