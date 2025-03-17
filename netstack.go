@@ -17,14 +17,14 @@ import (
 var _ Network = (*NetstackNetwork)(nil)
 
 type NetstackNetwork struct {
-	stack       *stack.Stack
+	ipstack     *stack.Stack
 	nicID       tcpip.NICID
 	resolveConf *ResolveConfig
 }
 
 // Netstack returns a network that uses the provided netstack stack and NIC ID.
-func Netstack(stack *stack.Stack, nicID tcpip.NICID, resolveConf *ResolveConfig) *NetstackNetwork {
-	return &NetstackNetwork{stack: stack, nicID: nicID, resolveConf: resolveConf}
+func Netstack(ipstack *stack.Stack, nicID tcpip.NICID, resolveConf *ResolveConfig) *NetstackNetwork {
+	return &NetstackNetwork{ipstack: ipstack, nicID: nicID, resolveConf: resolveConf}
 }
 
 func (n *NetstackNetwork) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
@@ -69,9 +69,9 @@ func (n *NetstackNetwork) DialContext(ctx context.Context, network, address stri
 		var err error
 		switch network {
 		case "tcp", "tcp4", "tcp6":
-			conn, err = gonet.DialContextTCP(ctx, n.stack, fa, pn)
+			conn, err = gonet.DialContextTCP(ctx, n.ipstack, fa, pn)
 		case "udp", "udp4", "udp6":
-			conn, err = gonet.DialUDP(n.stack, nil, &fa, pn)
+			conn, err = gonet.DialUDP(n.ipstack, nil, &fa, pn)
 		default:
 			return nil, fmt.Errorf("unsupported network type: %s", network)
 		}
@@ -116,7 +116,7 @@ func (n *NetstackNetwork) Listen(network, address string) (net.Listener, error) 
 	fa, pn := n.convertToFullAddr(netip.AddrPortFrom(addr, uint16(port)))
 
 	// Listen on the address.
-	lis, err := gonet.ListenTCP(n.stack, fa, pn)
+	lis, err := gonet.ListenTCP(n.ipstack, fa, pn)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (n *NetstackNetwork) ListenPacket(network, address string) (net.PacketConn,
 	// Convert to a netstack address.
 	fa, pn := n.convertToFullAddr(netip.AddrPortFrom(addr, uint16(port)))
 
-	return gonet.DialUDP(n.stack, &fa, nil, pn)
+	return gonet.DialUDP(n.ipstack, &fa, nil, pn)
 }
 
 func (n *NetstackNetwork) convertToFullAddr(addrPort netip.AddrPort) (tcpip.FullAddress, tcpip.NetworkProtocolNumber) {
