@@ -18,14 +18,13 @@ const (
 	resolvedIP     = "10.0.0.1"
 )
 
-func TestResolveLookupContextHost(t *testing.T) {
+func TestResolveLookupHost(t *testing.T) {
 	server := startDNSServer(t, network.Loopback(), localDNSServer)
 	require.NotNil(t, server)
 
 	resolveConf := &network.ResolveConfig{
 		Nameservers:   []string{localDNSServer},
 		SearchDomains: []string{"local"},
-		Options:       []string{"ndots:1"},
 	}
 
 	ctx := context.Background()

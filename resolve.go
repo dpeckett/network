@@ -2,7 +2,6 @@ package network
 
 import (
 	"context"
-	"fmt"
 	"math/rand/v2"
 	"net"
 	"strings"
@@ -17,11 +16,9 @@ type ResolveConfig struct {
 	Nameservers []string
 	// SearchDomains is a list of search domains to use.
 	SearchDomains []string
-	// Options is a list of resolver options to use.
-	// Supported options:
-	// - ndots:<n> sets the number of dots that must appear in a name before an initial absolute query is made.
-	//   The default is 1.
-	Options []string
+	// NDots is the number of dots in name to trigger absolute lookup.
+	// Defaults to 1 if nil.
+	NDots *int
 }
 
 // LookupHost looks up the given host using the resolver configuration.
@@ -41,16 +38,12 @@ func (r *ResolveConfig) LookupHost(ctx context.Context, host string, dialContext
 	}
 
 	ndots := 1
-	for _, opt := range r.Options {
-		if len(opt) > 6 && opt[:6] == "ndots:" {
-			if n, err := fmt.Sscanf(opt[6:], "%d", &ndots); err != nil || n != 1 {
-				ndots = 1
-			}
-		}
+	if r.NDots != nil {
+		ndots = *r.NDots
 	}
 
-	// Try search domains first.
-	if strings.Count(host, ".") < ndots && !dns.IsFqdn(host) {
+	// Perform a relative lookup if necessary.
+	if !dns.IsFqdn(host) && strings.Count(host, ".") < ndots {
 		for _, domain := range r.SearchDomains {
 			searchName := host + "." + domain
 			addrs, err := resolver.LookupHost(ctx, searchName)
