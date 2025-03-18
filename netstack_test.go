@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/dpeckett/network"
-	"github.com/dpeckett/network/nettesting"
+	"github.com/dpeckett/network/nettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,13 +23,13 @@ func TestNetstackNetwork(t *testing.T) {
 		clientPcapPath = "netstack_client.pcap"
 	}
 
-	serverStack, err := nettesting.NewStack(netip.MustParseAddr("10.0.0.1"), serverPcapPath)
+	serverStack, err := nettest.NewStack(netip.MustParseAddr("10.0.0.1"), serverPcapPath)
 	require.NoError(t, err)
 	t.Cleanup(serverStack.Close)
 
 	serverNetwork := network.Netstack(serverStack.Stack, serverStack.NICID, nil)
 
-	clientStack, err := nettesting.NewStack(netip.MustParseAddr("10.0.0.2"), clientPcapPath)
+	clientStack, err := nettest.NewStack(netip.MustParseAddr("10.0.0.2"), clientPcapPath)
 	require.NoError(t, err)
 	t.Cleanup(clientStack.Close)
 
@@ -44,7 +44,7 @@ func TestNetstackNetwork(t *testing.T) {
 
 	// Splice packets between the two stacks
 	go func() {
-		if err := nettesting.SplicePackets(ctx, serverStack, clientStack); err != nil && !errors.Is(err, context.Canceled) {
+		if err := nettest.SplicePackets(ctx, serverStack, clientStack); err != nil && !errors.Is(err, context.Canceled) {
 			panic(fmt.Errorf("packet splicing failed: %w", err))
 		}
 	}()
