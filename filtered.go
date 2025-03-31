@@ -59,6 +59,26 @@ func Filtered(conf *FilteredNetworkConfig) *FilteredNetwork {
 	}
 }
 
+// AddAllowedDestination adds a prefix to the list of allowed destinations.
+func (n *FilteredNetwork) AddAllowedDestination(prefix netip.Prefix) {
+	n.allowedDestinations.Insert(prefix, struct{}{})
+}
+
+// RemoveAllowedDestination removes a prefix from the list of allowed destinations.
+func (n *FilteredNetwork) RemoveAllowedDestination(prefix netip.Prefix) {
+	n.allowedDestinations.Remove(prefix)
+}
+
+// AddDeniedDestination adds a prefix to the list of denied destinations.
+func (n *FilteredNetwork) AddDeniedDestination(prefix netip.Prefix) {
+	n.deniedDestinations.Insert(prefix, struct{}{})
+}
+
+// RemoveDeniedDestination removes a prefix from the list of denied destinations.
+func (n *FilteredNetwork) RemoveDeniedDestination(prefix netip.Prefix) {
+	n.deniedDestinations.Remove(prefix)
+}
+
 func (n *FilteredNetwork) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	ip, port, err := n.resolveHostPort(ctx, addr)
 	if err != nil {
