@@ -5,6 +5,7 @@ go 1.23.1
 toolchain go1.23.7
 
 require (
+	github.com/dpeckett/triemap v0.3.1
 	github.com/miekg/dns v1.1.63
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/sync v0.8.0

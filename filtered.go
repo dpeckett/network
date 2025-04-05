@@ -16,7 +16,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/dpeckett/network/internal/triemap"
+	"github.com/dpeckett/triemap"
 )
 
 var _ Network = (*LoopbackNetwork)(nil)
