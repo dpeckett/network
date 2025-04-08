@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"sync"
 	"time"
 
 	"github.com/dpeckett/triemap"
@@ -27,6 +28,10 @@ type FilteredNetworkConfig struct {
 	AllowedDestinations []netip.Prefix
 	// Denied destination prefixes.
 	DeniedDestinations []netip.Prefix
+	// Allowed destination ports.
+	AllowedPorts []uint16
+	// Denied destination ports.
+	DeniedPorts []uint16
 	// The network to forward connections to.
 	Upstream Network
 }
@@ -37,11 +42,15 @@ type FilteredNetworkConfig struct {
 type FilteredNetwork struct {
 	allowedDestinations *triemap.TrieMap[struct{}]
 	deniedDestinations  *triemap.TrieMap[struct{}]
+	portsMutex          sync.RWMutex
+	allowedPorts        map[uint16]struct{}
+	deniedPorts         map[uint16]struct{}
 	upstream            Network
 }
 
 // Filtered creates a new filtered network with the given configuration.
 func Filtered(conf *FilteredNetworkConfig) *FilteredNetwork {
+	// Address filtering.
 	allowedDestinations := triemap.New[struct{}]()
 	for _, prefix := range conf.AllowedDestinations {
 		allowedDestinations.Insert(prefix, struct{}{})
@@ -52,9 +61,39 @@ func Filtered(conf *FilteredNetworkConfig) *FilteredNetwork {
 		deniedDestinations.Insert(prefix, struct{}{})
 	}
 
+	if allowedDestinations.Empty() {
+		// Allow all IPv4 addresses by default.
+		ipv4Any, _ := netip.AddrFromSlice(net.IPv4zero)
+		allowedDestinations.Insert(netip.PrefixFrom(ipv4Any, 0), struct{}{})
+
+		// Allow all IPv6 addresses by default.
+		ipv6Any, _ := netip.AddrFromSlice(net.IPv6zero)
+		allowedDestinations.Insert(netip.PrefixFrom(ipv6Any, 0), struct{}{})
+	}
+
+	// Port filtering.
+	allowedPorts := make(map[uint16]struct{})
+	for _, port := range conf.AllowedPorts {
+		allowedPorts[port] = struct{}{}
+	}
+
+	deniedPorts := make(map[uint16]struct{})
+	for _, port := range conf.DeniedPorts {
+		deniedPorts[port] = struct{}{}
+	}
+
+	if len(allowedPorts) == 0 {
+		// Allow all ports by default.
+		for i := 1; i <= 65535; i++ {
+			allowedPorts[uint16(i)] = struct{}{}
+		}
+	}
+
 	return &FilteredNetwork{
 		allowedDestinations: allowedDestinations,
 		deniedDestinations:  deniedDestinations,
+		allowedPorts:        allowedPorts,
+		deniedPorts:         deniedPorts,
 		upstream:            conf.Upstream,
 	}
 }
@@ -79,8 +118,41 @@ func (n *FilteredNetwork) RemoveDeniedDestination(prefix netip.Prefix) {
 	n.deniedDestinations.Remove(prefix)
 }
 
+// AddAllowedPort adds a port to the list of allowed ports.
+func (n *FilteredNetwork) AddAllowedPort(port uint16) {
+	n.portsMutex.Lock()
+	defer n.portsMutex.Unlock()
+	n.allowedPorts[port] = struct{}{}
+}
+
+// RemoveAllowedPort removes a port from the list of allowed ports.
+func (n *FilteredNetwork) RemoveAllowedPort(port uint16) {
+	n.portsMutex.Lock()
+	defer n.portsMutex.Unlock()
+	delete(n.allowedPorts, port)
+}
+
+// AddDeniedPort adds a port to the list of denied ports.
+func (n *FilteredNetwork) AddDeniedPort(port uint16) {
+	n.portsMutex.Lock()
+	defer n.portsMutex.Unlock()
+	n.deniedPorts[port] = struct{}{}
+}
+
+// RemoveDeniedPort removes a port from the list of denied ports.
+func (n *FilteredNetwork) RemoveDeniedPort(port uint16) {
+	n.portsMutex.Lock()
+	defer n.portsMutex.Unlock()
+	delete(n.deniedPorts, port)
+}
+
 func (n *FilteredNetwork) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	ip, port, err := n.resolveHostPort(ctx, addr)
+	ip, portStr, err := n.resolveHostPort(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	port, err := net.LookupPort(network, portStr)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +162,13 @@ func (n *FilteredNetwork) DialContext(ctx context.Context, network, addr string)
 		return nil, fmt.Errorf("destination %s is not allowed", ip)
 	}
 
-	return n.upstream.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+	// Check if the port is allowed.
+	if !n.allowedPort(uint16(port)) {
+		return nil, fmt.Errorf("port %d is not allowed", port)
+	}
+
+	// Dial the upstream network.
+	return n.upstream.DialContext(ctx, network, net.JoinHostPort(ip.String(), portStr))
 }
 
 func (n *FilteredNetwork) LookupHost(ctx context.Context, host string) ([]string, error) {
@@ -101,32 +179,55 @@ func (n *FilteredNetwork) Listen(network, address string) (net.Listener, error) 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	ip, port, err := n.resolveHostPort(ctx, address)
+	ip, portStr, err := n.resolveHostPort(ctx, address)
 	if err != nil {
 		return nil, err
 	}
 
+	port, err := net.LookupPort(network, portStr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if the destination is allowed.
 	if !n.allowedDestination(ip.Unmap()) {
 		return nil, fmt.Errorf("not allowed to listen on %s", ip)
 	}
 
-	return n.upstream.Listen(network, net.JoinHostPort(ip.String(), port))
+	// Check if the port is allowed.
+	if !n.allowedPort(uint16(port)) {
+		return nil, fmt.Errorf("port %d is not allowed", port)
+	}
+
+	return n.upstream.Listen(network, net.JoinHostPort(ip.String(), portStr))
 }
 
 func (n *FilteredNetwork) ListenPacket(network, address string) (net.PacketConn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	ip, port, err := n.resolveHostPort(ctx, address)
+	ip, portStr, err := n.resolveHostPort(ctx, address)
 	if err != nil {
 		return nil, err
 	}
 
+	port, err := net.LookupPort(network, portStr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if the destination is allowed.
 	if !n.allowedDestination(ip.Unmap()) {
 		return nil, fmt.Errorf("not allowed to listen on %s", ip)
 	}
 
-	return n.upstream.ListenPacket(network, net.JoinHostPort(ip.String(), port))
+	// Check if the port is allowed.
+	if !n.allowedPort(uint16(port)) {
+		return nil, fmt.Errorf("port %d is not allowed", port)
+	}
+
+	// Listen on the upstream network.
+	return n.upstream.ListenPacket(network, net.JoinHostPort(ip.String(), portStr))
 }
 
 func (n *FilteredNetwork) resolveHostPort(ctx context.Context, address string) (netip.Addr, string, error) {
@@ -166,6 +267,19 @@ func (n *FilteredNetwork) allowedDestination(addr netip.Addr) bool {
 	_, allowed := n.allowedDestinations.Get(addr)
 	if allowed {
 		if _, denied := n.deniedDestinations.Get(addr); denied {
+			allowed = false
+		}
+	}
+	return allowed
+}
+
+func (n *FilteredNetwork) allowedPort(port uint16) bool {
+	n.portsMutex.RLock()
+	defer n.portsMutex.RUnlock()
+
+	_, allowed := n.allowedPorts[port]
+	if allowed {
+		if _, denied := n.deniedPorts[port]; denied {
 			allowed = false
 		}
 	}

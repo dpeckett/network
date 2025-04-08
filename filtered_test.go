@@ -20,39 +20,75 @@ import (
 )
 
 func TestFilteredNetwork(t *testing.T) {
-	// Googles public DNS range
-	allowedDestinations := []netip.Prefix{
-		netip.MustParsePrefix("8.8.8.0/24"),
-		netip.MustParsePrefix("8.8.4.0/24"),
-	}
+	t.Run("Destination filtering", func(t *testing.T) {
+		// Googles public DNS range
+		allowedDestinations := []netip.Prefix{
+			netip.MustParsePrefix("8.8.8.0/24"),
+			netip.MustParsePrefix("8.8.4.0/24"),
+		}
 
-	deniedDestinations := []netip.Prefix{
-		netip.MustParsePrefix("8.8.4.0/24"),
-	}
+		deniedDestinations := []netip.Prefix{
+			netip.MustParsePrefix("8.8.4.0/24"),
+		}
 
-	upstream := network.Host()
+		upstream := network.Host()
 
-	conf := &network.FilteredNetworkConfig{
-		AllowedDestinations: allowedDestinations,
-		DeniedDestinations:  deniedDestinations,
-		Upstream:            upstream,
-	}
+		conf := &network.FilteredNetworkConfig{
+			AllowedDestinations: allowedDestinations,
+			DeniedDestinations:  deniedDestinations,
+			Upstream:            upstream,
+		}
 
-	n := network.Filtered(conf)
+		n := network.Filtered(conf)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	t.Cleanup(cancel)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		t.Cleanup(cancel)
 
-	// Should be allowed to connect to the allowed range
-	conn, err := n.DialContext(ctx, "tcp4", "8.8.8.8:53")
-	require.NoError(t, err)
-	_ = conn.Close()
+		// Should be allowed to connect to the allowed range
+		conn, err := n.DialContext(ctx, "tcp4", "8.8.8.8:53")
+		require.NoError(t, err)
+		_ = conn.Close()
 
-	// Should be forbidden to connect to the denied range
-	_, err = n.DialContext(ctx, "tcp4", "8.8.4.4:53")
-	require.Error(t, err)
+		// Should be forbidden to connect to the denied range
+		_, err = n.DialContext(ctx, "tcp4", "8.8.4.4:53")
+		require.Error(t, err)
 
-	// And cloudflare is totally outside the allowed list
-	_, err = n.DialContext(ctx, "tcp4", "1.1.1.1:53")
-	require.Error(t, err)
+		// And cloudflare is totally outside the allowed list
+		_, err = n.DialContext(ctx, "tcp4", "1.1.1.1:53")
+		require.Error(t, err)
+	})
+
+	t.Run("Port filtering", func(t *testing.T) {
+		allowedDestinations := []netip.Prefix{
+			netip.MustParsePrefix("8.8.8.0/24"),
+		}
+
+		upstream := network.Host()
+
+		conf := &network.FilteredNetworkConfig{
+			AllowedDestinations: allowedDestinations,
+			DeniedDestinations:  nil,
+			AllowedPorts:        []uint16{53, 80}, // Only allow DNS and HTTP
+			DeniedPorts:         []uint16{80},     // Explicitly deny HTTP
+			Upstream:            upstream,
+		}
+
+		n := network.Filtered(conf)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		t.Cleanup(cancel)
+
+		// Should be allowed to connect on port 53 (allowed and not denied)
+		conn, err := n.DialContext(ctx, "tcp4", "8.8.8.8:53")
+		require.NoError(t, err)
+		_ = conn.Close()
+
+		// Should not be allowed to connect on port 80 (explicitly denied)
+		_, err = n.DialContext(ctx, "tcp4", "8.8.8.8:80")
+		require.Error(t, err)
+
+		// Should not be allowed to connect on port 443 (not in allowed list)
+		_, err = n.DialContext(ctx, "tcp4", "8.8.8.8:443")
+		require.Error(t, err)
+	})
 }
