@@ -62,13 +62,9 @@ func Filtered(conf *FilteredNetworkConfig) *FilteredNetwork {
 	}
 
 	if allowedDestinations.Empty() {
-		// Allow all IPv4 addresses by default.
-		ipv4Any, _ := netip.AddrFromSlice(net.IPv4zero)
-		allowedDestinations.Insert(netip.PrefixFrom(ipv4Any, 0), struct{}{})
-
-		// Allow all IPv6 addresses by default.
-		ipv6Any, _ := netip.AddrFromSlice(net.IPv6zero)
-		allowedDestinations.Insert(netip.PrefixFrom(ipv6Any, 0), struct{}{})
+		// Allow all IPv4/IPv6 addresses by default.
+		allowedDestinations.Insert(netip.MustParsePrefix("0.0.0.0/0"), struct{}{})
+		allowedDestinations.Insert(netip.MustParsePrefix("::/0"), struct{}{})
 	}
 
 	// Port filtering.

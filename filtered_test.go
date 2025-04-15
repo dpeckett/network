@@ -21,41 +21,62 @@ import (
 
 func TestFilteredNetwork(t *testing.T) {
 	t.Run("Destination filtering", func(t *testing.T) {
-		// Googles public DNS range
-		allowedDestinations := []netip.Prefix{
-			netip.MustParsePrefix("8.8.8.0/24"),
-			netip.MustParsePrefix("8.8.4.0/24"),
-		}
+		t.Run("Allow and Deny", func(t *testing.T) {
+			// Googles public DNS range
+			allowedDestinations := []netip.Prefix{
+				netip.MustParsePrefix("8.8.8.0/24"),
+				netip.MustParsePrefix("8.8.4.0/24"),
+			}
 
-		deniedDestinations := []netip.Prefix{
-			netip.MustParsePrefix("8.8.4.0/24"),
-		}
+			deniedDestinations := []netip.Prefix{
+				netip.MustParsePrefix("8.8.4.0/24"),
+			}
 
-		upstream := network.Host()
+			upstream := network.Host()
 
-		conf := &network.FilteredNetworkConfig{
-			AllowedDestinations: allowedDestinations,
-			DeniedDestinations:  deniedDestinations,
-			Upstream:            upstream,
-		}
+			conf := &network.FilteredNetworkConfig{
+				AllowedDestinations: allowedDestinations,
+				DeniedDestinations:  deniedDestinations,
+				Upstream:            upstream,
+			}
 
-		n := network.Filtered(conf)
+			n := network.Filtered(conf)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		t.Cleanup(cancel)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			t.Cleanup(cancel)
 
-		// Should be allowed to connect to the allowed range
-		conn, err := n.DialContext(ctx, "tcp4", "8.8.8.8:53")
-		require.NoError(t, err)
-		_ = conn.Close()
+			// Should be allowed to connect to the allowed range
+			conn, err := n.DialContext(ctx, "tcp4", "8.8.8.8:53")
+			require.NoError(t, err)
+			_ = conn.Close()
 
-		// Should be forbidden to connect to the denied range
-		_, err = n.DialContext(ctx, "tcp4", "8.8.4.4:53")
-		require.Error(t, err)
+			// Should be forbidden to connect to the denied range
+			_, err = n.DialContext(ctx, "tcp4", "8.8.4.4:53")
+			require.Error(t, err)
 
-		// And cloudflare is totally outside the allowed list
-		_, err = n.DialContext(ctx, "tcp4", "1.1.1.1:53")
-		require.Error(t, err)
+			// And cloudflare is totally outside the allowed list
+			_, err = n.DialContext(ctx, "tcp4", "1.1.1.1:53")
+			require.Error(t, err)
+		})
+
+		t.Run("Allow All", func(t *testing.T) {
+			upstream := network.Host()
+
+			conf := &network.FilteredNetworkConfig{
+				DeniedPorts: []uint16{80},
+				Upstream:    upstream,
+			}
+
+			n := network.Filtered(conf)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			t.Cleanup(cancel)
+
+			// Should be allowed to connect to any address
+			conn, err := n.DialContext(ctx, "tcp4", "8.8.8.8:53")
+			require.NoError(t, err)
+			_ = conn.Close()
+		})
 	})
 
 	t.Run("Port filtering", func(t *testing.T) {
